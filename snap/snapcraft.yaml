@@ -1,0 +1,61 @@
+name: easyvizar-map
+base: core20
+version: "0.1"
+summary: Manager for 3D mapping data
+description: |
+  This module automatically merges 3D mapping data and
+  other sensor data that is uploaded to the EasyVizAR
+  edge server.
+
+grade: stable
+confinement: strict
+
+apps:
+  detect:
+    command: bin/map
+    daemon: simple
+    environment:
+      DATA_PATH: $SNAP/easyvizar
+      PYTHONPATH: $SNAP_DATA/lib/python3.8/site-packages
+      EASYVIZAR_SERVER: localhost:5000
+    plugs:
+      - network
+
+architectures:
+  - build-on: amd64
+  - build-on: arm64
+
+hooks:
+  install:
+    plugs: [network]
+  post-refresh:
+    plugs: [network]
+
+parts:
+  deps:
+    plugin: nil
+    stage-packages:
+      - libgl1
+      - libice6
+      - libsm6
+      - libx11-6
+      - libxext6
+      - libxcb1
+
+  detect:
+    plugin: python
+    source: .
+    build-packages:
+      - python3-dev
+    stage-packages:
+      - python3
+      - python3-pip
+    requirements:
+      - requirements.txt
+
+plugs:
+  data:
+    interface: content
+    content: data
+    target: $SNAP/easyvizar
+    default-provider: easyvizar-edge
