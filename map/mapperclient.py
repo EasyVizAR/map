@@ -74,6 +74,10 @@ class MapperClient:
         if None in (position, orientation):
             return
 
+        cache = self.loader.cache_contents(location_id)
+        if cache.surfaces == 0:
+            self.loader.fetch_surfaces(location_id)
+
         mesh = self.loader.load_cached_surfaces(location_id)
         print(mesh)
 
@@ -118,6 +122,7 @@ class MapperClient:
         # Ray cast against the environment mesh.
         points, index_ray, index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=False)
         print(points)
+        print(index_ray)
 
         scene = mesh.scene()
 
@@ -131,10 +136,20 @@ class MapperClient:
         cam_axis = trimesh.creation.axis(origin_size=0.1, transform=cam, origin_color=[0, 0, 255, 255])
         scene.add_geometry(cam_axis)
 
+        distances = np.linalg.norm(points - center, axis=0)
+        print(distances)
+
         # Add a cylinder for each predicted object location.
         for i, point in enumerate(points):
+            # It is possible not all rays hit something or that the solver changed
+            # the order of the rays. This gives us the index into the original data.
+            j = index_ray[i]
+
+            height = annotations[j]['boundary']['height'] * distances[i] / FY
+            width = annotations[j]['boundary']['width'] * distances[i] / FX
+
             obj_transform = vertical_cylinder_transform(point)
-            marker = trimesh.creation.cylinder(radius=0.2, height=0.5, transform=obj_transform, face_colors=[0, 255, 0, 192])
+            marker = trimesh.creation.cylinder(radius=width/2, height=height, transform=obj_transform, face_colors=[0, 255, 0, 192])
             scene.add_geometry(marker)
 
         scene.show()
@@ -147,7 +162,11 @@ class MapperClient:
         location_id = words[2]
         surface_id = words[4]
 
-        self.loader.fetch_surface(location_id, surface_id)
+        cache = self.loader.cache_contents(location_id)
+        if cache.surfaces == 0:
+            self.loader.fetch_surfaces(location_id)
+        else:
+            self.loader.fetch_surface(location_id, surface_id)
 
     def open_websocket(self):
         if self.server.startswith("https"):
@@ -163,7 +182,7 @@ class MapperClient:
         ws.send("subscribe surfaces:updated *")
         ws.send("subscribe photos:updated *")
 
-        return ws    
+        return ws
 
     def run(self):
         surfaces, surface_ids = self.loader.load_surfaces()

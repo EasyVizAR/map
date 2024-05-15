@@ -1,4 +1,5 @@
 import csv
+import dataclasses
 import os
 import time
 
@@ -14,6 +15,12 @@ def download_file(url, output_path):
         output.write(res.content)
 
 
+@dataclasses.dataclass
+class CacheContents:
+    surfaces: int = 0
+    traces: int = 0
+
+
 class DataLoader:
     def __init__(self, server="https://easyvizar.wings.cs.wisc.edu", location_id="956d639d-69e0-4ff7-a58c-1e505e8e096a", cache_dir="cache"):
         self.server = server
@@ -22,6 +29,27 @@ class DataLoader:
         self.cache_dir = cache_dir
         self.surfaces_dir = os.path.join(cache_dir, location_id, "surfaces")
         self.traces_dir = os.path.join(cache_dir, location_id, "traces")
+
+    def cache_contents(self, location_id):
+        """
+        Check the cache contents for a given location_id.
+
+        Returns a CacheContents object containing the number of files of different types.
+
+        Example:
+
+            CacheContents(surfaces=376, traces=0)
+
+        """
+        location_dir = os.path.join(self.cache_dir, location_id)
+
+        contents = CacheContents()
+        for ctype in ["surfaces", "traces"]:
+            path = os.path.join(location_dir, ctype)
+            if os.path.exists(path):
+                setattr(contents, ctype, len(os.listdir(path)))
+
+        return contents
 
     def fetch_surface(self, location_id, surface_id, ignore_cache=True):
         surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
@@ -35,6 +63,23 @@ class DataLoader:
             print("Downloading surface from {}".format(url))
             download_file(url, file_path)
 
+    def fetch_surfaces(self, location_id):
+        surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
+        os.makedirs(surfaces_dir, exist_ok=True)
+
+        url = "{}/locations/{}/surfaces".format(self.server, location_id)
+        res = requests.get(url)
+        for item in res.json():
+            file_name = "{}.ply".format(item['id'])
+            file_path = os.path.join(surfaces_dir, file_name)
+            if not os.path.exists(file_path):
+                # Avoid triggering server rate limit.
+                time.sleep(0.2)
+
+                url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, location_id, item['id'])
+                print("Downloading surface from {}".format(url))
+                download_file(url, file_path)
+
     def load_cached_surfaces(self, location_id):
         """
         Load all cached surfaces from a given location.
@@ -42,7 +87,7 @@ class DataLoader:
         Returns trimesh mesh containing all of the surfaces.
         """
         surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
-        
+
         surfaces = []
         for fname in os.listdir(surfaces_dir):
             path = os.path.join(surfaces_dir, fname)
