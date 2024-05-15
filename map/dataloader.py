@@ -22,13 +22,9 @@ class CacheContents:
 
 
 class DataLoader:
-    def __init__(self, server="https://easyvizar.wings.cs.wisc.edu", location_id="956d639d-69e0-4ff7-a58c-1e505e8e096a", cache_dir="cache"):
+    def __init__(self, server="https://easyvizar.wings.cs.wisc.edu", cache_dir="cache"):
         self.server = server
-        self.location_id = location_id
-
         self.cache_dir = cache_dir
-        self.surfaces_dir = os.path.join(cache_dir, location_id, "surfaces")
-        self.traces_dir = os.path.join(cache_dir, location_id, "traces")
 
     def cache_contents(self, location_id):
         """
@@ -96,40 +92,7 @@ class DataLoader:
 
         return trimesh.util.concatenate(surfaces)
 
-    def load_surfaces(self):
-        """
-        Load surfaces as trimesh meshes from server or cached files.
-
-        Returns:
-            [N] list of trimesh objects
-            [N] list of string UUIDs which consistently identify surfaces across updates
-        """
-        os.makedirs(self.surfaces_dir, exist_ok=True)
-
-        surfaces = []
-        surface_ids = []
-
-        url = "{}/locations/{}/surfaces".format(self.server, self.location_id)
-        res = requests.get(url)
-        for item in res.json():
-            file_name = "{}.ply".format(item['id'])
-            file_path = os.path.join(self.surfaces_dir, file_name)
-            if not os.path.exists(file_path):
-                # Avoid triggering server rate limit.
-                time.sleep(0.2)
-
-                url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, self.location_id, item['id'])
-                print("Downloading surface from {}".format(url))
-                download_file(url, file_path)
-
-            mesh = trimesh.load(file_path)
-            if isinstance(mesh, trimesh.Trimesh):
-                surfaces.append(mesh)
-                surface_ids.append(item['id'])
-
-        return surfaces, surface_ids
-
-    def load_traces(self):
+    def load_traces(self, location_id):
         """
         Load user position history traces from server or cached files.
 
@@ -138,15 +101,16 @@ class DataLoader:
                 (M, 1) timestamps in seconds
                 (M, 3) points (x, y, z)
         """
-        os.makedirs(self.traces_dir, exist_ok=True)
+        traces_dir = os.path.join(self.cache_dir, location_id, "traces")
+        os.makedirs(traces_dir, exist_ok=True)
 
         traces = []
 
-        url = "{}/locations/{}/check-ins".format(self.server, self.location_id)
+        url = "{}/locations/{}/check-ins".format(self.server, location_id)
         res = requests.get(url)
         for item in res.json():
             file_name = "pose-changes-{}.csv".format(item['id'])
-            file_path = os.path.join(self.traces_dir, file_name)
+            file_path = os.path.join(traces_dir, file_name)
             if not os.path.exists(file_path):
                 # Avoid triggering server rate limit.
                 time.sleep(0.2)

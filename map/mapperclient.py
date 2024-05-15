@@ -38,9 +38,9 @@ def vertical_cylinder_transform(center):
 
 
 class MapperClient:
-    def __init__(self, server, seed_location_id):
+    def __init__(self, server):
         self.server = server
-        self.loader = DataLoader(server=server, location_id=seed_location_id)
+        self.loader = DataLoader(server=server)
 
     def on_photo_updated(self, data):
         photo = data['current']
@@ -185,8 +185,6 @@ class MapperClient:
         return ws
 
     def run(self):
-        surfaces, surface_ids = self.loader.load_surfaces()
-
         ws = self.open_websocket()
         while True:
             msg = ws.recv()
