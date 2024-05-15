@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 from http import HTTPStatus
 
@@ -22,6 +23,11 @@ CX = 454 / W
 CY = 219 / H
 
 
+MARK_CLASSES = set([
+    "chair"
+])
+
+
 def vertical_cylinder_transform(center):
     transform = np.zeros((4, 4))
 
@@ -41,6 +47,28 @@ class MapperClient:
     def __init__(self, server):
         self.server = server
         self.loader = DataLoader(server=server)
+
+    def on_close(self, ws, status_code, message):
+        print("Connection closed with message: {} ({})".format(message, status_code))
+
+    def on_error(self, ws, error):
+        print(error)
+
+    def on_message(self, ws, message):
+        print(message)
+        data = json.loads(message)
+
+        if data['event'].startswith("surfaces:"):
+            self.on_surface_changed(data)
+
+        elif data['event'] == "photos:updated":
+            self.on_photo_updated(data)
+
+    def on_open(self, ws):
+        print("Connected to {}".format(self.server))
+        ws.send("subscribe surfaces:created *")
+        ws.send("subscribe surfaces:updated *")
+        ws.send("subscribe photos:updated *")
 
     def on_photo_updated(self, data):
         photo = data['current']
@@ -101,7 +129,11 @@ class MapperClient:
         rot_mat = quaternion.as_rotation_matrix(orientation)
 
         directions = []
+        sizes = []
         for annotation in annotations:
+            if annotation['label'] not in MARK_CLASSES:
+                continue
+
             bbox = annotation['boundary']
             x = bbox['left'] + 0.5 * bbox['width']
             y = bbox['top'] + 0.5 * bbox['height']
@@ -117,12 +149,26 @@ class MapperClient:
             direction = np.matmul(rot_mat, direction)
             directions.append(direction)
 
+            sizes.append([
+                bbox['width'] / FX,
+                bbox['height'] / FY
+            ])
+
+        if len(directions) == 0:
+            return
+
         origins = [np.array(center)] * len(directions)
 
         # Ray cast against the environment mesh.
         points, index_ray, index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=False)
         print(points)
         print(index_ray)
+
+        if len(points) == 0:
+            return
+
+        features = self.loader.load_features(location_id)
+        feature_points = np.array([f['position'] for f in features])
 
         scene = mesh.scene()
 
@@ -136,20 +182,35 @@ class MapperClient:
         cam_axis = trimesh.creation.axis(origin_size=0.1, transform=cam, origin_color=[0, 0, 255, 255])
         scene.add_geometry(cam_axis)
 
-        distances = np.linalg.norm(points - center, axis=0)
-        print(distances)
+        distances = np.linalg.norm(points - center, axis=1)
+        sizes = distances[:, np.newaxis] * np.array(sizes)[index_ray, :]
 
         # Add a cylinder for each predicted object location.
         for i, point in enumerate(points):
-            # It is possible not all rays hit something or that the solver changed
-            # the order of the rays. This gives us the index into the original data.
-            j = index_ray[i]
+            width, height = sizes[i, :]
+            half_height = 0.5 * height
+            radius = 0.5 * width
 
-            height = annotations[j]['boundary']['height'] * distances[i] / FY
-            width = annotations[j]['boundary']['width'] * distances[i] / FX
+            # Check if any existing features are within this expanded cylinder.
+            # Check distance in horizontal plane against double the cylinder radius for error,
+            # and check whether points are above the bottom and below the top+some.
+            # If any points are already within the cylinder, we do not create another feature.
+            feature_distances = np.linalg.norm(feature_points[:, [0, 2]] - point[[0, 2]], axis=1)
+            print("feature_distances: ", feature_distances)
+            within_range = feature_distances < width # double radius
+            above_bottom = feature_points[:, 1] > point[1] - half_height
+            below_top = feature_points[:, 1] < point[1] + height # look higher up than down
+
+            color = [0, 255, 0, 96]
+            if not np.any(within_range & above_bottom & below_top):
+                name = annotations[index_ray[i]]['label']
+                marker_point = point + [0, half_height, 0]
+                self.loader.create_feature(location_id, "object", name, marker_point)
+
+                color = [0, 255, 0, 192]
 
             obj_transform = vertical_cylinder_transform(point)
-            marker = trimesh.creation.cylinder(radius=width/2, height=height, transform=obj_transform, face_colors=[0, 255, 0, 192])
+            marker = trimesh.creation.cylinder(radius=radius, height=height, transform=obj_transform, face_colors=[0, 255, 0, 192])
             scene.add_geometry(marker)
 
         scene.show()
@@ -185,13 +246,14 @@ class MapperClient:
         return ws
 
     def run(self):
-        ws = self.open_websocket()
-        while True:
-            msg = ws.recv()
-            data = json.loads(msg)
+        if self.server.startswith("https"):
+            ws_server = self.server.replace("https", "wss")
+        else:
+            ws_server = self.server.replace("http", "ws")
 
-            if data['event'].startswith("surfaces:"):
-                self.on_surface_changed(data)
-
-            elif data['event'] == "photos:updated":
-                self.on_photo_updated(data)
+        wsapp = websocket.WebSocketApp(ws_server + "/ws",
+                on_close=self.on_close, on_error=self.on_error,
+                on_open=self.on_open, on_message=self.on_message,
+                on_reconnect=self.on_open)
+        wsapp.run_forever(ping_interval=30, ping_timeout=15,
+                ping_payload="ping", reconnect=15)

@@ -1,6 +1,8 @@
 import csv
 import dataclasses
 import os
+import pickle
+import tempfile
 import time
 
 import requests
@@ -47,17 +49,33 @@ class DataLoader:
 
         return contents
 
+    def create_feature(self, location_id, feature_type, name, position):
+        data = {
+            "type": feature_type,
+            "name": name,
+            "position": {
+                "x": position[0],
+                "y": position[1],
+                "z": position[2]
+            }
+        }
+
+        url = "{}/locations/{}/features".format(self.server, location_id)
+        res = requests.post(url, json=data)
+
     def fetch_surface(self, location_id, surface_id, ignore_cache=True):
         surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
         os.makedirs(surfaces_dir, exist_ok=True)
 
-        file_name = "{}.ply".format(surface_id)
+        file_name = "{}.pickle".format(surface_id)
         file_path = os.path.join(surfaces_dir, file_name)
 
         if ignore_cache or not os.path.exists(file_path):
             url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, location_id, surface_id)
             print("Downloading surface from {}".format(url))
-            download_file(url, file_path)
+            mesh = trimesh.load_remote(url)
+            with open(file_path, "wb") as output:
+                pickle.dump(mesh, output)
 
     def fetch_surfaces(self, location_id):
         surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
@@ -66,15 +84,7 @@ class DataLoader:
         url = "{}/locations/{}/surfaces".format(self.server, location_id)
         res = requests.get(url)
         for item in res.json():
-            file_name = "{}.ply".format(item['id'])
-            file_path = os.path.join(surfaces_dir, file_name)
-            if not os.path.exists(file_path):
-                # Avoid triggering server rate limit.
-                time.sleep(0.2)
-
-                url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, location_id, item['id'])
-                print("Downloading surface from {}".format(url))
-                download_file(url, file_path)
+            self.fetch_surface(location_id, item['id'])
 
     def load_cached_surfaces(self, location_id):
         """
@@ -87,10 +97,27 @@ class DataLoader:
         surfaces = []
         for fname in os.listdir(surfaces_dir):
             path = os.path.join(surfaces_dir, fname)
-            mesh = trimesh.load(path)
-            surfaces.append(mesh)
+            with open(path, "rb") as source:
+                mesh = pickle.load(source)
+                surfaces.append(mesh)
 
         return trimesh.util.concatenate(surfaces)
+
+    def load_features(self, location_id):
+        features = []
+
+        url = "{}/locations/{}/features".format(self.server, location_id)
+        res = requests.get(url)
+        for item in res.json():
+            position = item['position']
+            item['position'] = np.array([
+                position['x'],
+                position['y'],
+                position['z']
+            ])
+            features.append(item)
+
+        return features
 
     def load_traces(self, location_id):
         """
