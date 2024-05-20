@@ -1,26 +1,26 @@
 import json
 import os
 import sys
+import traceback
 
 from http import HTTPStatus
 
 import numpy as np
 
+import marshmallow
 import quaternion
 import requests
 import trimesh
 import websocket
 
 from .dataloader import DataLoader
+from .photo import Photo
 
 
-# Camera intrinsic parameters
-W = 896
-H = 594
-FX = 700 / W
-FY = 702 / H
-CX = 454 / W
-CY = 219 / H
+DISPLAY = os.environ.get("DISPLAY")
+
+QUEUE_NAME = os.environ.get("QUEUE_NAME", "detection-3d")
+NEXT_QUEUE_NAME = os.environ.get("NEXT_QUEUE_NAME", "done")
 
 
 MARK_CLASSES = set([
@@ -53,6 +53,7 @@ class MapperClient:
 
     def on_error(self, ws, error):
         print(error)
+        traceback.print_tb(error.__traceback__)
 
     def on_message(self, ws, message):
         print(message)
@@ -66,40 +67,21 @@ class MapperClient:
 
     def on_open(self, ws):
         print("Connected to {}".format(self.server))
+        ws.send("hold 3600")
         ws.send("subscribe surfaces:created *")
         ws.send("subscribe surfaces:updated *")
         ws.send("subscribe photos:updated *")
 
-    def on_photo_updated(self, data):
-        photo = data['current']
+    def find_objects_in_photo(self, photo):
+        if not photo.is_situated():
+            return
+        location_id = str(photo.camera_location_id)
 
-        location_id = photo.get("camera_location_id")
-        if location_id is None:
+        if len(photo.annotations) == 0:
             return
 
-        photo_file = None
-        for f in photo.get("files", []):
-            if f['purpose'] == "photo":
-                photo_file = f
-                break
+        photo_file = photo.get_file("photo")
         if photo_file is None:
-            return
-
-        annotations = photo.get('annotations', [])
-        if len(annotations) == 0:
-            return
-
-        # Need to do an extra query to get all of the photo information
-        url = "{}/photos/{}".format(self.server, photo['id'])
-        response = requests.get(url)
-        if response.ok and response.status_code == HTTPStatus.OK:
-            photo = response.json()
-        else:
-            return
-
-        position = photo.get("camera_position")
-        orientation = photo.get("camera_orientation")
-        if None in (position, orientation):
             return
 
         cache = self.loader.cache_contents(location_id)
@@ -113,34 +95,21 @@ class MapperClient:
         # with the right-handed convention in trimesh.
 #        mesh.apply_scale([-1, 1, 1])
 
-        resolution = [photo_file['height'], photo_file['width']]
-        center = [
-            photo['camera_position']['x'],
-            photo['camera_position']['y'],
-            photo['camera_position']['z'],
-        ]
-        orientation = np.quaternion(
-            photo['camera_orientation']['w'],
-            photo['camera_orientation']['x'],
-            photo['camera_orientation']['y'],
-            photo['camera_orientation']['z']
-        )
-
-        rot_mat = quaternion.as_rotation_matrix(orientation)
+        resolution = [photo_file.height, photo_file.width]
+        center = photo.camera_position.as_array()
+        rot_mat = photo.camera_orientation.as_rotation_matrix()
+        fx, fy, cx, cy = photo.camera.relative_parameters()
 
         directions = []
         sizes = []
-        for annotation in annotations:
-            if annotation['label'] not in MARK_CLASSES:
+        for annotation in photo.annotations:
+            if annotation.label not in MARK_CLASSES:
                 continue
 
-            bbox = annotation['boundary']
-            x = bbox['left'] + 0.5 * bbox['width']
-            y = bbox['top'] + 0.5 * bbox['height']
-
+            pos = annotation.boundary.center()
             direction = np.array([
-                (x - CX) / FX,
-                (CY - y) / FY,
+                (pos[0] - cx) / fx,
+                (cy - pos[1]) / fy,
                 1
             ])
 
@@ -150,8 +119,8 @@ class MapperClient:
             directions.append(direction)
 
             sizes.append([
-                bbox['width'] / FX,
-                bbox['height'] / FY
+                annotation.boundary.width / fx,
+                annotation.boundary.height / fy
             ])
 
         if len(directions) == 0:
@@ -163,7 +132,6 @@ class MapperClient:
         points, index_ray, index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=False)
         print(points)
         print(index_ray)
-
         if len(points) == 0:
             return
 
@@ -203,7 +171,7 @@ class MapperClient:
 
             color = [0, 255, 0, 96]
             if not np.any(within_range & above_bottom & below_top):
-                name = annotations[index_ray[i]]['label']
+                name = photo.annotations[index_ray[i]].label
                 marker_point = point + [0, half_height, 0]
                 self.loader.create_feature(location_id, "object", name, marker_point)
 
@@ -213,7 +181,18 @@ class MapperClient:
             marker = trimesh.creation.cylinder(radius=radius, height=height, transform=obj_transform, face_colors=[0, 255, 0, 192])
             scene.add_geometry(marker)
 
-        scene.show()
+        if DISPLAY is not None:
+            scene.show()
+
+    def on_photo_updated(self, data):
+        photo = Photo.Schema(unknown=marshmallow.EXCLUDE).load(data['current'])
+        print(photo)
+
+        if photo.queue_name != QUEUE_NAME:
+            return
+
+        self.find_objects_in_photo(photo)
+        self.loader.set_photo_queue(photo.id, NEXT_QUEUE_NAME)
 
     def on_surface_changed(self, data):
         words = data['uri'].split('/')
@@ -228,22 +207,6 @@ class MapperClient:
             self.loader.fetch_surfaces(location_id)
         else:
             self.loader.fetch_surface(location_id, surface_id)
-
-    def open_websocket(self):
-        if self.server.startswith("https"):
-            ws_server = self.server.replace("https", "wss")
-        else:
-            ws_server = self.server.replace("http", "ws")
-
-        ws = websocket.WebSocket()
-        ws.connect(ws_server + "/ws")
-        print("Connected to {}".format(ws_server))
-
-        ws.send("subscribe surfaces:created *")
-        ws.send("subscribe surfaces:updated *")
-        ws.send("subscribe photos:updated *")
-
-        return ws
 
     def run(self):
         if self.server.startswith("https"):

@@ -1,2 +1,5 @@
+marshmallow==3.21.2
+marshmallow_dataclass==8.6.1
 requests==2.31.0
+trimesh==4.0.2
 websocket-client==1.8.0

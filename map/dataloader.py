@@ -163,3 +163,11 @@ class DataLoader:
                 traces.append((np.array(times), np.array(points)))
 
         return traces
+
+    def set_photo_queue(self, photo_id, queue_name):
+        data = {
+            "queue_name": queue_name
+        }
+
+        url = "{}/photos/{}".format(self.server, photo_id)
+        res = requests.patch(url, json=data)
