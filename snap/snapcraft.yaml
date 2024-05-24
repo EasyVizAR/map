@@ -42,6 +42,9 @@ parts:
       - python3-pip
     python-requirements:
       - requirements.txt
+    python-packages:
+      - on amd64:
+        - embreex
 
 plugs:
   data:

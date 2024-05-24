@@ -1,7 +1,6 @@
 anyio==4.3.0
 certifi==2024.2.2
 charset-normalizer==3.3.2
-embreex==2.17.7.post4
 exceptiongroup==1.2.1
 h11==0.14.0
 httpcore==1.0.5
