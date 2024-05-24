@@ -84,6 +84,9 @@ class DataLoader:
         url = "{}/locations/{}/surfaces".format(self.server, location_id)
         res = requests.get(url)
         for item in res.json():
+            # Avoid triggering server rate limit.
+            time.sleep(0.2)
+
             self.fetch_surface(location_id, item['id'])
 
     def load_cached_surfaces(self, location_id):
