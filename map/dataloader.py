@@ -73,7 +73,11 @@ class DataLoader:
         if ignore_cache or not os.path.exists(file_path):
             url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, location_id, surface_id)
             print("Downloading surface from {}".format(url))
-            mesh = trimesh.load_remote(url)
+            try:
+                mesh = trimesh.load_remote(url)
+            except Exception as error:
+                print("Warning: error fetching PLY file: {}".format(error))
+                return
             with open(file_path, "wb") as output:
                 pickle.dump(mesh, output)
 

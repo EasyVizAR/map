@@ -165,14 +165,15 @@ class MapperClient:
             # Check distance in horizontal plane against double the cylinder radius for error,
             # and check whether points are above the bottom and below the top+some.
             # If any points are already within the cylinder, we do not create another feature.
-            feature_distances = np.linalg.norm(feature_points[:, [0, 2]] - point[[0, 2]], axis=1)
-            print("feature_distances: ", feature_distances)
-            within_range = feature_distances < width # double radius
-            above_bottom = feature_points[:, 1] > point[1] - half_height
-            below_top = feature_points[:, 1] < point[1] + height # look higher up than down
+            if len(feature_points) > 0:
+                feature_distances = np.linalg.norm(feature_points[:, [0, 2]] - point[[0, 2]], axis=1)
+                print("feature_distances: ", feature_distances)
+                within_range = feature_distances < width # double radius
+                above_bottom = feature_points[:, 1] > point[1] - half_height
+                below_top = feature_points[:, 1] < point[1] + height # look higher up than down
 
             color = [0, 255, 0, 96]
-            if not np.any(within_range & above_bottom & below_top):
+            if len(feature_points) == 0 or not np.any(within_range & above_bottom & below_top):
                 name = photo.annotations[index_ray[i]].label
                 marker_point = point + [0, half_height, 0]
                 self.loader.create_feature(location_id, "object", name, marker_point)
