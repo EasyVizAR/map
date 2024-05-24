@@ -1,5 +1,15 @@
+certifi==2024.2.2
+charset-normalizer==3.3.2
+idna==3.7
 marshmallow==3.21.2
 marshmallow_dataclass==8.6.1
-requests==2.31.0
-trimesh==4.0.2
+mypy-extensions==1.0.0
+numpy==1.26.4
+numpy-quaternion==2023.0.3
+packaging==24.0
+requests==2.32.2
+trimesh==4.4.0
+typing-inspect==0.9.0
+typing_extensions==4.12.0
+urllib3==2.2.1
 websocket-client==1.8.0
