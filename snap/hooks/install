@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# This script does some one-time tasks when the snap is installed for the first
+# time.  After the first install, it will not be run again for version upgrades
+# unless the snap is completely removed and reinstalled.
+#
+
+tmp_dir="$SNAP_COMMON"
+install_dir="$SNAP_DATA"
+
+# Some devices may have a tmpfs filesystem that is too small to unpack torch
+# for installation, which results in "No space left on device" errors.
+export TMPDIR="$tmp_dir"
+
+if [ -f "$SNAP/bin/python3" ]; then
+    python="$SNAP/bin/python3"
+elif [ -f "$SNAP/usr/bin/python3" ]; then
+    python="$SNAP/usr/bin/python3"
+else
+    echo "Could not find python executable"
+    exit 1
+fi
+
+install_package () {
+    "$python" -m pip install --no-cache-dir --prefix "$install_dir" "$1"
+}
+
+if [ $SNAP_ARCH = "amd64" ]; then
+    install_package embreex
+fi

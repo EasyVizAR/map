@@ -15,9 +15,10 @@ apps:
     command: bin/map
     daemon: simple
     environment:
-      CACHE_DIR: $SNAP_DATA
+      CACHE_DIR: $SNAP_DATA/cache
       DATA_PATH: $SNAP/easyvizar
       EASYVIZAR_SERVER: "http://localhost:5000"
+      PYTHONPATH: $SNAP_DATA/lib/python3.10/site-packages
     plugs:
       - network
 
@@ -42,9 +43,6 @@ parts:
       - python3-pip
     python-requirements:
       - requirements.txt
-    python-packages:
-      - on amd64:
-        - embreex
 
 plugs:
   data:
