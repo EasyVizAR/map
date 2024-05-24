@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 import traceback
 
 from http import HTTPStatus
@@ -17,6 +18,7 @@ from .dataloader import DataLoader
 from .photo import Photo
 
 
+CACHE_DIR = os.environ.get("CACHE_DIR", "cache")
 DISPLAY = os.environ.get("DISPLAY")
 
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "detection-3d")
@@ -46,7 +48,7 @@ def vertical_cylinder_transform(center):
 class MapperClient:
     def __init__(self, server):
         self.server = server
-        self.loader = DataLoader(server=server)
+        self.loader = DataLoader(server=server, cache_dir=CACHE_DIR)
 
     def on_close(self, ws, status_code, message):
         print("Connection closed with message: {} ({})".format(message, status_code))
@@ -218,5 +220,7 @@ class MapperClient:
                 on_close=self.on_close, on_error=self.on_error,
                 on_open=self.on_open, on_message=self.on_message,
                 on_reconnect=self.on_open)
-        wsapp.run_forever(ping_interval=30, ping_timeout=15,
-                ping_payload="ping", reconnect=15)
+        while True:
+            wsapp.run_forever(ping_interval=30, ping_timeout=15,
+                    ping_payload="ping", reconnect=15)
+            time.sleep(15)

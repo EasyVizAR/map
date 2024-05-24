@@ -15,9 +15,9 @@ apps:
     command: bin/map
     daemon: simple
     environment:
+      CACHE_DIR: $SNAP_DATA
       DATA_PATH: $SNAP/easyvizar
-      PYTHONPATH: $SNAP_DATA/lib/python3.8/site-packages
-      EASYVIZAR_SERVER: localhost:5000
+      EASYVIZAR_SERVER: "http://localhost:5000"
     plugs:
       - network
 
@@ -32,17 +32,7 @@ hooks:
     plugs: [network]
 
 parts:
-  deps:
-    plugin: nil
-    stage-packages:
-      - libgl1
-      - libice6
-      - libsm6
-      - libx11-6
-      - libxext6
-      - libxcb1
-
-  detect:
+  map:
     plugin: python
     source: .
     build-packages:
