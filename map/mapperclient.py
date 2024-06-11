@@ -25,6 +25,12 @@ QUEUE_NAME = os.environ.get("QUEUE_NAME", "detection-3d")
 NEXT_QUEUE_NAME = os.environ.get("NEXT_QUEUE_NAME", "done")
 
 
+# Do not label objects which appear very small for some reason.  It could be
+# due to visual occlusion or an error in the distance estimation.
+MINIMUM_WIDTH = 0.2
+MINIMUM_HEIGHT = 0.2
+
+
 MARK_CLASSES = set([
     "chair"
 ])
@@ -118,9 +124,6 @@ class MapperClient:
         directions = []
         sizes = []
         for annotation in photo.annotations:
-            if annotation.label not in MARK_CLASSES:
-                continue
-
             pos = annotation.boundary.center()
             direction = np.array([
                 (pos[0] - cx) / fx,
@@ -178,9 +181,16 @@ class MapperClient:
             radius = 0.5 * width
             color = [0, 255, 0, 96]
 
+            if width < MINIMUM_WIDTH or height < MINIMUM_HEIGHT:
+                print("Skipping object with small width and height ({}, {})".format(width, height))
+                continue
+
+            name = photo.annotations[index_ray[i]].label
+            if name not in MARK_CLASSES:
+                continue
+
             # Check if any existing features are within this expanded cylinder.
             if not cylinder_contains_any(feature_points, point, width, height):
-                name = photo.annotations[index_ray[i]].label
                 marker_point = point + [0, half_height, 0]
                 self.loader.create_feature(location_id, "object", name, marker_point)
 
