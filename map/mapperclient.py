@@ -151,7 +151,10 @@ class MapperClient:
             return
 
         features = self.loader.load_features(location_id)
-        feature_points = np.array([f['position'] for f in features])
+        if len(features) > 0:
+            feature_points = np.array([f['position'] for f in features])
+        else:
+            feature_points = np.empty((0, 3))
 
         scene = mesh.scene()
 
