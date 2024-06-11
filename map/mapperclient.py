@@ -30,6 +30,19 @@ MARK_CLASSES = set([
 ])
 
 
+def cylinder_contains_any(points, center, radius=1, height=1):
+    if len(points) == 0:
+        return False
+
+    distances = np.linalg.norm(points[:, [0, 2]] - center[[0, 2]], axis=1)
+    print("distances: ", distances)
+    within_range = distances < radius
+    above_bottom = points[:, 1] > center[1] - (height / 2)
+    below_top = points[:, 1] < center[1] + height # look higher up than down
+
+    return np.any(within_range & above_bottom & below_top)
+
+
 def vertical_cylinder_transform(center):
     transform = np.zeros((4, 4))
 
@@ -160,23 +173,18 @@ class MapperClient:
             width, height = sizes[i, :]
             half_height = 0.5 * height
             radius = 0.5 * width
+            color = [0, 255, 0, 96]
 
             # Check if any existing features are within this expanded cylinder.
-            # Check distance in horizontal plane against double the cylinder radius for error,
-            # and check whether points are above the bottom and below the top+some.
-            # If any points are already within the cylinder, we do not create another feature.
-            if len(feature_points) > 0:
-                feature_distances = np.linalg.norm(feature_points[:, [0, 2]] - point[[0, 2]], axis=1)
-                print("feature_distances: ", feature_distances)
-                within_range = feature_distances < width # double radius
-                above_bottom = feature_points[:, 1] > point[1] - half_height
-                below_top = feature_points[:, 1] < point[1] + height # look higher up than down
-
-            color = [0, 255, 0, 96]
-            if len(feature_points) == 0 or not np.any(within_range & above_bottom & below_top):
+            if not cylinder_contains_any(feature_points, point, width, height):
                 name = photo.annotations[index_ray[i]].label
                 marker_point = point + [0, half_height, 0]
                 self.loader.create_feature(location_id, "object", name, marker_point)
+
+                # Append to the list of features from the server so that we do
+                # not create duplicate features even if the image has
+                # overlapping bounding boxes for some reason.
+                feature_points = np.vstack([feature_points, marker_point])
 
                 color = [0, 255, 0, 192]
 
