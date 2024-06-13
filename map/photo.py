@@ -1,7 +1,7 @@
 import uuid
 
 from dataclasses import field
-from typing import Optional
+from typing import List, Optional
 
 import marshmallow
 from marshmallow_dataclass import dataclass
@@ -56,10 +56,15 @@ class Annotation:
     class Meta:
         unknown = marshmallow.EXCLUDE
 
+    id: int = 0
+
     boundary: Box = field(default_factory=Box)
     confidence: float = 0
     label: str = ""
     sublabel: str = ""
+
+    contour: List[List[float]] = field(default_factory=list)
+    projected_contour: List[List[float]] = field(default_factory=list)
 
 
 @dataclass

@@ -93,6 +93,36 @@ class MapperClient:
         ws.send("subscribe surfaces:updated *")
         ws.send("subscribe photos:updated *")
 
+    def project_contour(self, photo, contour, mesh, distance=None):
+        center = photo.camera_position.as_array()
+        rot_mat = photo.camera_orientation.as_rotation_matrix()
+        fx, fy, cx, cy = photo.camera.relative_parameters()
+
+        print(contour.shape)
+
+        # Contour is a list of x, y coordinates in pixel space.
+        # Find the direction of a ray passing through each point.
+        directions = np.ones((contour.shape[0], 3))
+        directions[:, 0] = (contour[:, 0] - cx) / fx
+        directions[:, 1] = (cy - contour[:, 1]) / fy
+
+        # Multiply by the camera rotation matrix to produce
+        # direction vector in world coordinate frame.
+        directions = np.matmul(directions, rot_mat.T)
+
+        if distance is None:
+            # Ray cast against the environment mesh.
+            origins = [np.array(center)] * len(directions)
+            points, index_ray, index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=False)
+        else:
+            # Project the contour as if it were on a plane at a distance from
+            # the camera.  This works better if the contour does not cleanly
+            # match up with the mesh, but it will look funny if viewed from a
+            # different direction.
+            points = distance * directions + center
+
+        return points
+
     def find_objects_in_photo(self, photo):
         if not photo.is_situated():
             return
@@ -121,9 +151,11 @@ class MapperClient:
         rot_mat = photo.camera_orientation.as_rotation_matrix()
         fx, fy, cx, cy = photo.camera.relative_parameters()
 
+        scene = mesh.scene()
+
         directions = []
         sizes = []
-        for annotation in photo.annotations:
+        for i, annotation in enumerate(photo.annotations):
             pos = annotation.boundary.center()
             direction = np.array([
                 (pos[0] - cx) / fx,
@@ -159,8 +191,6 @@ class MapperClient:
         else:
             feature_points = np.empty((0, 3))
 
-        scene = mesh.scene()
-
         # Axis at world coordinate system origin.
         world_axis = trimesh.creation.axis(origin_size=0.2)
         scene.add_geometry(world_axis)
@@ -181,11 +211,15 @@ class MapperClient:
             radius = 0.5 * width
             color = [0, 255, 0, 96]
 
+            # Index into the original annotations array
+            ai = index_ray[i]
+            annotation = photo.annotations[ai]
+
             if width < MINIMUM_WIDTH or height < MINIMUM_HEIGHT:
                 print("Skipping object with small width and height ({}, {})".format(width, height))
                 continue
 
-            name = photo.annotations[index_ray[i]].label
+            name = annotation.label
             if name not in MARK_CLASSES:
                 continue
 
@@ -199,11 +233,17 @@ class MapperClient:
                 # overlapping bounding boxes for some reason.
                 feature_points = np.vstack([feature_points, marker_point])
 
-                color = [0, 255, 0, 192]
-
             obj_transform = vertical_cylinder_transform(point)
-            marker = trimesh.creation.cylinder(radius=radius, height=height, transform=obj_transform, face_colors=[0, 255, 0, 192])
+            marker = trimesh.creation.cylinder(radius=radius, height=height, transform=obj_transform, face_colors=[0, 255, 0, 128])
             scene.add_geometry(marker)
+
+            if len(annotation.contour) > 0:
+                pcontour = self.project_contour(photo, np.array(annotation.contour), mesh, distance=distances[i])
+                self.loader.update_photo_annotation(annotation.id, projected_contour=pcontour.tolist())
+
+                line = trimesh.path.entities.Line(list(range(len(pcontour))), color=[0, 0, 255, 255])
+                path = trimesh.path.path.Path3D([line], np.array(pcontour))
+                scene.add_geometry(path)
 
         if DISPLAY is not None:
             scene.show()

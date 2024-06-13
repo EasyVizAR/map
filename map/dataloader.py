@@ -178,3 +178,7 @@ class DataLoader:
 
         url = "{}/photos/{}".format(self.server, photo_id)
         res = requests.patch(url, json=data)
+
+    def update_photo_annotation(self, annotation_id, **data):
+        url = "{}/photos/annotations/{}".format(self.server, annotation_id)
+        res = requests.patch(url, json=data)
