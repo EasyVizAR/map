@@ -214,17 +214,14 @@ class MapperClient:
             # Index into the original annotations array
             ai = index_ray[i]
             annotation = photo.annotations[ai]
+            name = annotation.label
 
             if width < MINIMUM_WIDTH or height < MINIMUM_HEIGHT:
                 print("Skipping object with small width and height ({}, {})".format(width, height))
                 continue
 
-            name = annotation.label
-            if name not in MARK_CLASSES:
-                continue
-
             # Check if any existing features are within this expanded cylinder.
-            if not cylinder_contains_any(feature_points, point, width, height):
+            if name in MARK_CLASSES and not cylinder_contains_any(feature_points, point, width, height):
                 marker_point = point + [0, half_height, 0]
                 self.loader.create_feature(location_id, "object", name, marker_point)
 
