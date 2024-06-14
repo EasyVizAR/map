@@ -36,6 +36,14 @@ MARK_CLASSES = set([
 ])
 
 
+# Skip contour projection for these classes because
+# they are not expected to be part of the world mesh.
+EXCLUDE_CONTOURS = set([
+    "face",
+    "person"
+])
+
+
 def cylinder_contains_any(points, center, radius=1, height=1):
     if len(points) == 0:
         return False
@@ -234,7 +242,7 @@ class MapperClient:
             marker = trimesh.creation.cylinder(radius=radius, height=height, transform=obj_transform, face_colors=[0, 255, 0, 128])
             scene.add_geometry(marker)
 
-            if len(annotation.contour) > 0:
+            if name not in EXCLUDE_CONTOURS and len(annotation.contour) > 0:
                 pcontour = self.project_contour(photo, np.array(annotation.contour), mesh, distance=distances[i])
                 self.loader.update_photo_annotation(annotation.id, projected_contour=pcontour.tolist())
 
