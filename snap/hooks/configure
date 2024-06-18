@@ -6,12 +6,14 @@
 
 CONFIG_PATH="$SNAP_DATA/config.json"
 
+export_keys=()
 apply_default()
 {
-    current=$(snapctl get "$1")
+    current="$(snapctl get $1)"
     if [ -z "$current" ]; then
         snapctl set "$1=$2"
     fi
+    export_keys+=($1)
 }
 
 apply_default enable-contours true
@@ -19,4 +21,6 @@ apply_default enable-features false
 apply_default next-queue-name done
 apply_default queue-name detection-3d
 
-snapctl get -d >"$CONFIG_PATH"
+# Create a JSON file with the configuration for the Python service to load.
+# snapctl seems to require the list of setting names that we want to export.
+snapctl get -d ${export_keys[*]} >"$CONFIG_PATH"
