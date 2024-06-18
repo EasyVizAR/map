@@ -32,7 +32,7 @@ MINIMUM_HEIGHT = 0.2
 
 
 MARK_CLASSES = set([
-    "chair"
+#    "chair"
 ])
 
 
