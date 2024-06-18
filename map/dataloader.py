@@ -70,16 +70,26 @@ class DataLoader:
         file_name = "{}.pickle".format(surface_id)
         file_path = os.path.join(surfaces_dir, file_name)
 
-        if ignore_cache or not os.path.exists(file_path):
-            url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, location_id, surface_id)
-            print("Downloading surface from {}".format(url))
-            try:
-                mesh = trimesh.load_remote(url)
-            except Exception as error:
-                print("Warning: error fetching PLY file: {}".format(error))
-                return
-            with open(file_path, "wb") as output:
-                pickle.dump(mesh, output)
+        try:
+            with open(file_path, "rb") as source:
+                return pickle.load(source)
+        except:
+            pass
+
+        # Avoid triggering server rate limit.
+        time.sleep(0.2)
+
+        url = "{}/locations/{}/surfaces/{}/surface.ply".format(self.server, location_id, surface_id)
+        print("Downloading surface from {}".format(url))
+        try:
+            mesh = trimesh.load_remote(url)
+        except Exception as error:
+            print("Warning: error fetching PLY file: {}".format(error))
+            return
+        with open(file_path, "wb") as output:
+            pickle.dump(mesh, output)
+
+        return mesh
 
     def fetch_surfaces(self, location_id):
         surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
@@ -125,6 +135,26 @@ class DataLoader:
             features.append(item)
 
         return features
+
+    def load_surfaces(self, location_id):
+        """
+        Load all active surfaces from a given location.
+
+        Returns trimesh mesh containing all of the surfaces.
+        """
+        surfaces_dir = os.path.join(self.cache_dir, location_id, "surfaces")
+        os.makedirs(surfaces_dir, exist_ok=True)
+
+        surfaces = []
+
+        url = "{}/locations/{}/surfaces".format(self.server, location_id)
+        res = requests.get(url)
+        for item in res.json():
+            mesh = self.fetch_surface(location_id, item['id'], ignore_cache=False)
+            if mesh is not None:
+                surfaces.append(mesh)
+
+        return trimesh.util.concatenate(surfaces)
 
     def load_traces(self, location_id):
         """

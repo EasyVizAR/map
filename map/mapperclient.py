@@ -88,7 +88,6 @@ class MapperClient:
         traceback.print_tb(error.__traceback__)
 
     def on_message(self, ws, message):
-        print(message)
         data = json.loads(message)
 
         if data['event'].startswith("surfaces:"):
@@ -146,11 +145,7 @@ class MapperClient:
         if photo_file is None:
             return
 
-        cache = self.loader.cache_contents(location_id)
-        if cache.surfaces == 0:
-            self.loader.fetch_surfaces(location_id)
-
-        mesh = self.loader.load_cached_surfaces(location_id)
+        mesh = self.loader.load_surfaces(location_id)
         print(mesh)
 
         # Mirror the mesh about the X axis to be consistent
@@ -258,8 +253,6 @@ class MapperClient:
 
     def on_photo_updated(self, data):
         photo = Photo.Schema(unknown=marshmallow.EXCLUDE).load(data['current'])
-        print(photo)
-
         if photo.queue_name != self.queue_name:
             return
 
@@ -274,11 +267,7 @@ class MapperClient:
         location_id = words[2]
         surface_id = words[4]
 
-        cache = self.loader.cache_contents(location_id)
-        if cache.surfaces == 0:
-            self.loader.fetch_surfaces(location_id)
-        else:
-            self.loader.fetch_surface(location_id, surface_id)
+        self.loader.fetch_surface(location_id, surface_id)
 
     def run(self):
         if self.server.startswith("https"):
