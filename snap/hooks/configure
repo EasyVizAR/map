@@ -14,9 +14,9 @@ apply_default()
     fi
 }
 
-apply_default enable_contours true
-apply_default enable_features false
-apply_default next_queue_name done
-apply_default queue_name detection-3d
+apply_default enable-contours true
+apply_default enable-features false
+apply_default next-queue-name done
+apply_default queue-name detection-3d
 
 snapctl get -d >"$CONFIG_PATH"

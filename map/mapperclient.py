@@ -75,10 +75,10 @@ class MapperClient:
         self.config = config
         self.loader = DataLoader(server=server, cache_dir=CACHE_DIR)
 
-        self.enable_contours = config.get("enable_contours", True)
-        self.enable_features = config.get("enable_features", False)
-        self.next_queue_name = config.get("next_queue_name", "done")
-        self.queue_name = config.get("queue_name", "detection-3d")
+        self.enable_contours = config.get("enable-contours", True)
+        self.enable_features = config.get("enable-features", False)
+        self.next_queue_name = config.get("next-queue-name", "done")
+        self.queue_name = config.get("queue-name", "detection-3d")
 
     def on_close(self, ws, status_code, message):
         print("Connection closed with message: {} ({})".format(message, status_code))
