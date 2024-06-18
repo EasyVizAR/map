@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Write the snap configuration to a JSON file so it is easier for the Python
+# service to read.
+#
+
+CONFIG_PATH="$SNAP_DATA/config.json"
+
+apply_default()
+{
+    current=$(snapctl get "$1")
+    if [ -z "$current" ]; then
+        snapctl set "$1" "$2"
+    fi
+}
+
+apply_default enable_contours true
+apply_default enable_features false
+apply_default next_queue_name done
+apply_default queue_name detection-3d
+
+snapctl get -d >"$CONFIG_PATH"

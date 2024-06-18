@@ -21,9 +21,6 @@ from .photo import Photo
 CACHE_DIR = os.environ.get("CACHE_DIR", "cache")
 DISPLAY = os.environ.get("DISPLAY")
 
-QUEUE_NAME = os.environ.get("QUEUE_NAME", "detection-3d")
-NEXT_QUEUE_NAME = os.environ.get("NEXT_QUEUE_NAME", "done")
-
 
 # Do not label objects which appear very small for some reason.  It could be
 # due to visual occlusion or an error in the distance estimation.
@@ -32,7 +29,7 @@ MINIMUM_HEIGHT = 0.2
 
 
 MARK_CLASSES = set([
-#    "chair"
+    "chair"
 ])
 
 
@@ -73,9 +70,15 @@ def vertical_cylinder_transform(center):
 
 
 class MapperClient:
-    def __init__(self, server):
+    def __init__(self, server, config):
         self.server = server
+        self.config = config
         self.loader = DataLoader(server=server, cache_dir=CACHE_DIR)
+
+        self.enable_contours = config.get("enable_contours", True)
+        self.enable_features = config.get("enable_features", False)
+        self.next_queue_name = config.get("next_queue_name", "done")
+        self.queue_name = config.get("queue_name", "detection-3d")
 
     def on_close(self, ws, status_code, message):
         print("Connection closed with message: {} ({})".format(message, status_code))
@@ -229,7 +232,7 @@ class MapperClient:
                 continue
 
             # Check if any existing features are within this expanded cylinder.
-            if name in MARK_CLASSES and not cylinder_contains_any(feature_points, point, width, height):
+            if self.enable_features and name in MARK_CLASSES and not cylinder_contains_any(feature_points, point, width, height):
                 marker_point = point + [0, half_height, 0]
                 self.loader.create_feature(location_id, "object", name, marker_point)
 
@@ -242,7 +245,7 @@ class MapperClient:
             marker = trimesh.creation.cylinder(radius=radius, height=height, transform=obj_transform, face_colors=[0, 255, 0, 128])
             scene.add_geometry(marker)
 
-            if name not in EXCLUDE_CONTOURS and len(annotation.contour) > 0:
+            if self.enable_contours and name not in EXCLUDE_CONTOURS and len(annotation.contour) > 0:
                 pcontour = self.project_contour(photo, np.array(annotation.contour), mesh, distance=distances[i])
                 self.loader.update_photo_annotation(annotation.id, projected_contour=pcontour.tolist())
 
@@ -257,11 +260,11 @@ class MapperClient:
         photo = Photo.Schema(unknown=marshmallow.EXCLUDE).load(data['current'])
         print(photo)
 
-        if photo.queue_name != QUEUE_NAME:
+        if photo.queue_name != self.queue_name:
             return
 
         self.find_objects_in_photo(photo)
-        self.loader.set_photo_queue(photo.id, NEXT_QUEUE_NAME)
+        self.loader.set_photo_queue(photo.id, self.next_queue_name)
 
     def on_surface_changed(self, data):
         words = data['uri'].split('/')
