@@ -10,7 +10,7 @@ apply_default()
 {
     current=$(snapctl get "$1")
     if [ -z "$current" ]; then
-        snapctl set "$1" "$2"
+        snapctl set "$1=$2"
     fi
 }
 
