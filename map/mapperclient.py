@@ -5,6 +5,7 @@ import time
 import traceback
 
 from http import HTTPStatus
+from pkg_resources import packaging
 
 import numpy as np
 
@@ -275,11 +276,24 @@ class MapperClient:
         else:
             ws_server = self.server.replace("http", "ws")
 
-        wsapp = websocket.WebSocketApp(ws_server + "/ws",
-                on_close=self.on_close, on_error=self.on_error,
-                on_open=self.on_open, on_message=self.on_message,
-                on_reconnect=self.on_open)
+        handlers=dict(
+            on_close=self.on_close,
+            on_error=self.on_error,
+            on_open=self.on_open,
+            on_message=self.on_message
+        )
+        if packaging.version.parse(websocket.__version__) >= packaging.version.parse("1.8.0"):
+            handlers['on_reconnect'] = self.on_open
+
+        wsapp = websocket.WebSocketApp(ws_server + "/ws", **handlers)
         while True:
-            wsapp.run_forever(ping_interval=30, ping_timeout=15,
-                    ping_payload="ping", reconnect=15)
+            wsapp_args = dict(
+                ping_interval=30,
+                ping_timeout=15,
+                ping_payload="ping"
+            )
+            if packaging.version.parse(websocket.__version__) >= packaging.version.parse("1.8.0"):
+                wsapp_args['reconnect'] = 15
+
+            wsapp.run_forever(**wsapp_args)
             time.sleep(15)

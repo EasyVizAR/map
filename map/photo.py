@@ -107,8 +107,8 @@ class Photo:
     id: int = 0
     priority: int = 0
     queue_name: str = "created"
-    annotations: list[Annotation] = field(default_factory=list)
-    files: list[File] = field(default_factory=list)
+    annotations: List[Annotation] = field(default_factory=list)
+    files: List[File] = field(default_factory=list)
     camera: Optional[Camera] = None
     camera_location_id: Optional[uuid.UUID] = None
     camera_position: Optional[Position] = None
